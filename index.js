@@ -891,7 +891,10 @@ function createContext(opts) {
             )
           }
         }
-        gl.bindVertexArray(cmd.vertexArray.handle)
+        if (state.vertexArray !== cmd.vertexArray.handle) {
+          state.vertexArray = cmd.vertexArray.handle
+          gl.bindVertexArray(cmd.vertexArray.handle)
+        }
         if (cmd.vertexArray.indices) {
           let indexBuffer = cmd.vertexArray.indices.buffer
           if (!indexBuffer && cmd.vertexArray.indices.class === 'indexBuffer') {
@@ -904,6 +907,10 @@ function createContext(opts) {
           type = cmd.vertexArray.indices.type || indexBuffer.type
         }
       } else {
+        if (state.vertexArray !== undefined) {
+          state.vertexArray = undefined
+          gl.bindVertexArray(null)
+        }
         // TODO: disable unused vertex array slots, when?
         for (let i = 0; i < 16; i++) {
           state.activeAttributes[i] = null
