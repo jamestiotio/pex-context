@@ -90,8 +90,17 @@ function updateProgram(ctx, program, opts) {
   // TODO: implement custom vertex layouts
   // gl.bindAttribLocation(program, location, attributeName)
 
+  if (opts.vertexLayout) {
+    Object.keys(opts.vertexLayout).forEach((name) => {
+      const attribute = opts.vertexLayout[name]
+      gl.bindAttribLocation(program.handle, attribute.location, name)
+    })
+  }
+
   gl.attachShader(program.handle, vertShader)
   gl.attachShader(program.handle, fragShader)
+
+  
   gl.linkProgram(program.handle)
 
   if (!gl.getProgramParameter(program.handle, gl.LINK_STATUS)) {

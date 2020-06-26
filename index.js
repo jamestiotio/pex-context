@@ -12,6 +12,7 @@ const createPipeline = require('./pipeline')
 const createProgram = require('./program')
 const createBuffer = require('./buffer')
 const createQuery = require('./query')
+const createVertexArray = require('./vertex-array')
 const checkProps = require('./check-props')
 const isWebGL2 = require('is-webgl2-context')
 
@@ -64,6 +65,7 @@ function createContext(opts) {
     maxCubeMapTextureSize: gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE),
     instancedArrays: false,
     instancing: false, // TODO: deprecate
+    vertexArrayObject: false,
     elementIndexUint32: !!gl.getExtension('OES_element_index_uint'),
     standardDerivatives: !!gl.getExtension('OES_standard_derivatives'),
     depthTexture: !!gl.getExtension('WEBGL_depth_texture'),
@@ -300,6 +302,23 @@ function createContext(opts) {
     capabilities.maxColorAttachments = gl.getParameter(gl.MAX_COLOR_ATTACHMENTS)
   }
 
+  if (!gl.createVertexArray) {
+    const ext = gl.getExtension('OES_vertex_array_object')
+    if (!ext) {
+      gl.createVertexArray = function() {
+        throw new Error('OES_vertex_array_object not supported')
+      }
+    } else {
+      gl.createVertexArray = ext.createVertexArrayOES.bind(ext)
+      gl.bindVertexArray = ext.bindVertexArrayOES.bind(ext)
+      capabilities.vartexArrayObject = true
+    }
+  } else {
+    capabilities.vartexArrayObject = true
+  }
+
+  
+
   log('capabilities', capabilities)
 
   Object.assign(ctx, {
@@ -491,6 +510,13 @@ function createContext(opts) {
           : ''
       )
       return this.resource(createPass(this, opts))
+    },
+    vertexArray: function (opts) {
+      log(
+        'vertexArray',
+        opts
+      )
+      return this.resource(createVertexArray(this, opts))
     },
     query: function(opts) {
       log('query', opts)
@@ -841,137 +867,183 @@ function createContext(opts) {
         }
       }
 
+      let count = cmd.count
+      let offset = 0
+      let type = 0
       let instanced = false
-      // TODO: disable unused vertex array slots
-      for (let i = 0; i < 16; i++) {
-        state.activeAttributes[i] = null
-        gl.disableVertexAttribArray(i)
-      }
-
-      // TODO: the same as i support [tex] and { texture: tex } i should support buffers in attributes?
-      for (let i = 0; i < vertexLayout.length; i++) {
-        const layout = vertexLayout[i]
-        const name = layout[0]
-        const location = layout[1]
-        const size = layout[2]
-        const attrib = cmd.attributes[i] || cmd.attributes[name]
-
-        if (!attrib) {
-          log(
-            'Invalid command',
-            cmd,
-            "doesn't satisfy vertex layout",
-            vertexLayout
-          )
-          assert.fail(
-            `Command is missing attribute "${name}" at location ${location} with ${attrib}`
-          )
-        }
-
-        let buffer = attrib.buffer
-        if (!buffer && attrib.class === 'vertexBuffer') {
-          buffer = attrib
-        }
-
-        if (!buffer || !buffer.target) {
-          log('Invalid command', cmd)
-          assert.fail(
-            `Trying to draw arrays with invalid buffer for attribute : ${name}`
-          )
-        }
-
-        gl.bindBuffer(buffer.target, buffer.handle)
-        if (size === 16) {
-          gl.enableVertexAttribArray(location + 0)
-          gl.enableVertexAttribArray(location + 1)
-          gl.enableVertexAttribArray(location + 2)
-          gl.enableVertexAttribArray(location + 3)
-          state.activeAttributes[location + 0] = buffer
-          state.activeAttributes[location + 1] = buffer
-          state.activeAttributes[location + 2] = buffer
-          state.activeAttributes[location + 3] = buffer
-          // we still check for buffer type because while e.g. pex-renderer would copy buffer type to attrib
-          // a raw pex-context example probably would not
-          gl.vertexAttribPointer(
-            location,
-            4,
-            attrib.type || buffer.type,
-            attrib.normalized || false,
-            attrib.stride || 64,
-            attrib.offset || 0
-          )
-          gl.vertexAttribPointer(
-            location + 1,
-            4,
-            attrib.type || buffer.type,
-            attrib.normalized || false,
-            attrib.stride || 64,
-            attrib.offset || 16
-          )
-          gl.vertexAttribPointer(
-            location + 2,
-            4,
-            attrib.type || buffer.type,
-            attrib.normalized || false,
-            attrib.stride || 64,
-            attrib.offset || 32
-          )
-          gl.vertexAttribPointer(
-            location + 3,
-            4,
-            attrib.type || buffer.type,
-            attrib.normalized || false,
-            attrib.stride || 64,
-            attrib.offset || 48
-          )
-          if (attrib.divisor) {
-            gl.vertexAttribDivisor(location + 0, attrib.divisor)
-            gl.vertexAttribDivisor(location + 1, attrib.divisor)
-            gl.vertexAttribDivisor(location + 2, attrib.divisor)
-            gl.vertexAttribDivisor(location + 3, attrib.divisor)
-            instanced = true
-          } else if (capabilities.instancing) {
-            gl.vertexAttribDivisor(location + 0, 0)
-            gl.vertexAttribDivisor(location + 1, 0)
-            gl.vertexAttribDivisor(location + 2, 0)
-            gl.vertexAttribDivisor(location + 3, 0)
-          }
-        } else {
-          gl.enableVertexAttribArray(location)
-          state.activeAttributes[location] = buffer
-          gl.vertexAttribPointer(
-            location,
-            size,
-            attrib.type || buffer.type,
-            attrib.normalized || false,
-            attrib.stride || 0,
-            attrib.offset || 0
-          )
-          if (attrib.divisor) {
-            gl.vertexAttribDivisor(location, attrib.divisor)
-            instanced = true
-          } else if (capabilities.instancing) {
-            gl.vertexAttribDivisor(location, 0)
+      if (cmd.vertexArray) {
+        //TODO: verify vertex layout
+        //TODO: check for instanced attribute
+        for (let i = 0; i < vertexLayout.length; i++) {
+          const layout = vertexLayout[i]
+          const name = layout[0]
+          const location = layout[1]
+          if (!cmd.vertexArray.attributes[name] || !cmd.vertexArray.attributes[name].location == location) {
+            log(
+              'Invalid command',
+              cmd,
+              "vertex array doesn't satisfy vertex layout",
+              vertexLayout
+            )
+            assert.fail(
+              `Command is missing attribute "${name}" at location ${location}`
+            )
           }
         }
-        // TODO: how to match index with vertexLayout location?
+        gl.bindVertexArray(cmd.vertexArray.handle)
+        if (cmd.vertexArray.indices) {
+          let indexBuffer = cmd.vertexArray.indices.buffer
+          if (!indexBuffer && cmd.vertexArray.indices.class === 'indexBuffer') {
+            indexBuffer = cmd.vertexArray.indices
+          }
+          state.indexBuffer = indexBuffer
+
+          if (!count) count = indexBuffer.length
+          offset = cmd.vertexArray.indices.offset || 0
+          type = cmd.vertexArray.indices.type || indexBuffer.type
+        }
+      } else {
+        // TODO: disable unused vertex array slots, when?
+        for (let i = 0; i < 16; i++) {
+          state.activeAttributes[i] = null
+          gl.disableVertexAttribArray(i)
+        }
+
+        // TODO: the same as i support [tex] and { texture: tex } i should support buffers in attributes?
+        for (let i = 0; i < vertexLayout.length; i++) {
+          const layout = vertexLayout[i]
+          const name = layout[0]
+          const location = layout[1]
+          const size = layout[2]
+          const attrib = cmd.attributes[i] || cmd.attributes[name]
+
+          if (!attrib) {
+            log(
+              'Invalid command',
+              cmd,
+              "doesn't satisfy vertex layout",
+              vertexLayout
+            )
+            assert.fail(
+              `Command is missing attribute "${name}" at location ${location} with ${attrib}`
+            )
+          }
+
+          let buffer = attrib.buffer
+          if (!buffer && attrib.class === 'vertexBuffer') {
+            buffer = attrib
+          }
+
+          if (!buffer || !buffer.target) {
+            log('Invalid command', cmd)
+            assert.fail(
+              `Trying to draw arrays with invalid buffer for attribute : ${name}`
+            )
+          }
+
+          gl.bindBuffer(buffer.target, buffer.handle)
+          if (size === 16) {
+            gl.enableVertexAttribArray(location + 0)
+            gl.enableVertexAttribArray(location + 1)
+            gl.enableVertexAttribArray(location + 2)
+            gl.enableVertexAttribArray(location + 3)
+            state.activeAttributes[location + 0] = buffer
+            state.activeAttributes[location + 1] = buffer
+            state.activeAttributes[location + 2] = buffer
+            state.activeAttributes[location + 3] = buffer
+            // we still check for buffer type because while e.g. pex-renderer would copy buffer type to attrib
+            // a raw pex-context example probably would not
+            gl.vertexAttribPointer(
+              location,
+              4,
+              attrib.type || buffer.type,
+              attrib.normalized || false,
+              attrib.stride || 64,
+              attrib.offset || 0
+            )
+            gl.vertexAttribPointer(
+              location + 1,
+              4,
+              attrib.type || buffer.type,
+              attrib.normalized || false,
+              attrib.stride || 64,
+              attrib.offset || 16
+            )
+            gl.vertexAttribPointer(
+              location + 2,
+              4,
+              attrib.type || buffer.type,
+              attrib.normalized || false,
+              attrib.stride || 64,
+              attrib.offset || 32
+            )
+            gl.vertexAttribPointer(
+              location + 3,
+              4,
+              attrib.type || buffer.type,
+              attrib.normalized || false,
+              attrib.stride || 64,
+              attrib.offset || 48
+            )
+            if (attrib.divisor) {
+              gl.vertexAttribDivisor(location + 0, attrib.divisor)
+              gl.vertexAttribDivisor(location + 1, attrib.divisor)
+              gl.vertexAttribDivisor(location + 2, attrib.divisor)
+              gl.vertexAttribDivisor(location + 3, attrib.divisor)
+              instanced = true
+            } else if (capabilities.instancing) {
+              gl.vertexAttribDivisor(location + 0, 0)
+              gl.vertexAttribDivisor(location + 1, 0)
+              gl.vertexAttribDivisor(location + 2, 0)
+              gl.vertexAttribDivisor(location + 3, 0)
+            }
+          } else {
+            gl.enableVertexAttribArray(location)
+            state.activeAttributes[location] = buffer
+            gl.vertexAttribPointer(
+              location,
+              size,
+              attrib.type || buffer.type,
+              attrib.normalized || false,
+              attrib.stride || 0,
+              attrib.offset || 0
+            )
+            if (attrib.divisor) {
+              gl.vertexAttribDivisor(location, attrib.divisor)
+              instanced = true
+            } else if (capabilities.instancing) {
+              gl.vertexAttribDivisor(location, 0)
+            }
+          }
+          // TODO: how to match index with vertexLayout location?
+        }
+
+        if (cmd.indices) {
+          let indexBuffer = cmd.indices.buffer
+          if (!indexBuffer && cmd.indices.class === 'indexBuffer') {
+            indexBuffer = cmd.indices
+          }
+          if (!indexBuffer || !indexBuffer.target) {
+            log('Invalid command', cmd)
+            assert.fail(`Trying to draw arrays with invalid buffer for elements`)
+          }
+          state.indexBuffer = indexBuffer
+          gl.bindBuffer(indexBuffer.target, indexBuffer.handle)
+
+          if (!count) count = indexBuffer.length
+          offset = cmd.indices.offset || 0
+          type = cmd.indices.type || indexBuffer.type
+        }
       }
 
       let primitive = cmd.pipeline.primitive
-      if (cmd.indices) {
-        let indexBuffer = cmd.indices.buffer
-        if (!indexBuffer && cmd.indices.class === 'indexBuffer') {
-          indexBuffer = cmd.indices
-        }
-        if (!indexBuffer || !indexBuffer.target) {
-          log('Invalid command', cmd)
-          assert.fail(`Trying to draw arrays with invalid buffer for elements`)
-        }
-        state.indexBuffer = indexBuffer
-        gl.bindBuffer(indexBuffer.target, indexBuffer.handle)
-        var count = cmd.count || indexBuffer.length
-        var offset = cmd.indices.offset || 0
-        var type = cmd.indices.type || indexBuffer.type
+      if (!window.once) {
+        console.log(cmd, count, offset, type)
+        window.once = true
+      }
+
+      if (state.indexBuffer) {
+        //repeated code {                
         if (instanced) {
           // TODO: check if instancing available
           gl.drawElementsInstanced(
@@ -1099,7 +1171,7 @@ function createContext(opts) {
         }
       }
 
-      if (cmd.attributes) {
+      if (cmd.attributes || cmd.vertexArray) {
         this.drawVertexData(cmd)
       }
     },

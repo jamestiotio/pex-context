@@ -15,7 +15,8 @@ const allowedProps = [
   'cullFace',
   'cullFaceMode',
   'colorMask',
-  'primitive'
+  'primitive',
+  'vertexLayout'
 ]
 
 function createPipeline(ctx, opts) {
@@ -54,7 +55,8 @@ function createPipeline(ctx, opts) {
   if (opts.vert && opts.frag) {
     pipeline.program = ctx.program({
       vert: opts.vert,
-      frag: opts.frag
+      frag: opts.frag,
+      vertexLayout: opts.vertexLayout
     })
   }
 
