@@ -24,6 +24,7 @@ const allowedCommandProps = [
   'pipeline',
   'uniforms',
   'attributes',
+  'vertexArray',
   'indices',
   'count',
   'instances',
