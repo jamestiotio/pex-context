@@ -102,6 +102,10 @@ function updateBuffer(ctx, buffer, opts) {
   // TODO: is this a valid guess?
   buffer.length = data.length
 
+  if (ctx.state.vertexArray) {
+    ctx.state.vertexArray = undefined
+    gl.bindVertexArray(null)
+  }
   // TODO: push state, and pop as this can modify existing VBO?
   gl.bindBuffer(buffer.target, buffer.handle)
   if (!isNaN(offset)) {
