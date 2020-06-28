@@ -1045,10 +1045,6 @@ function createContext(opts) {
       }
 
       let primitive = cmd.pipeline.primitive
-      if (!window.once) {
-        console.log(cmd, count, offset, type)
-        window.once = true
-      }
 
       if (state.indexBuffer) {
         //repeated code {                
