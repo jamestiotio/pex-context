@@ -28,6 +28,10 @@ function updateVertexArray(ctx, vertexArray, vertexLayout) {
   const gl = ctx.gl
   gl.bindVertexArray(vertexArray.handle)
 
+  for (let i = 0; i < 16; i++) {
+    ctx.state.activeAttributes[i] = null
+    gl.disableVertexAttribArray(i)
+  }
 
   // TODO: the same as i support [tex] and { texture: tex } i should support buffers in attributes?  
   const attributeNames = Object.keys(vertexArray.attributes)
@@ -35,8 +39,9 @@ function updateVertexArray(ctx, vertexArray, vertexLayout) {
   for (let i = 0; i < attributeNames.length; i++) {    
     const name = attributeNames[i]
     const attrib = vertexArray.attributes[name]
-    const location = (attrib.location !== undefined) ? attrib.location : i
+    // const location = (attrib.location !== undefined) ? attrib.location : i
     attrib.location = vertexLayout[name].location
+    const location = attrib.location
 
     //TODO: that size comes from shader, can it come from buffer?
     const size = typeToSize[vertexLayout[name].type] //TODO: hardcoded vec4 size

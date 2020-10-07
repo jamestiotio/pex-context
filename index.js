@@ -55,8 +55,10 @@ function createContext(opts) {
   else if (opts && opts.gl) gl = opts.gl
   assert(gl, 'pex-context: createContext failed')
 
+  const webgl2 = isWebGL2(gl)
+  //TODO: which of those extensions are always avail in WebGL2
   const capabilities = {
-    isWebGL2: isWebGL2(gl),
+    isWebGL2: webgl2,
     maxColorAttachments: 1,
     maxTextureImageUnits: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS),
     maxVertexTextureImageUnits: gl.getParameter(
@@ -73,7 +75,8 @@ function createContext(opts) {
     shaderTextureLod: !!gl.getExtension('EXT_shader_texture_lod'),
     textureFloat: !!gl.getExtension('OES_texture_float'),
     textureFloatLinear: !!gl.getExtension('OES_texture_float_linear'),
-    textureHalfFloat: !!gl.getExtension('OES_texture_half_float'),
+    textureHalfFloat: !!gl.getExtension('OES_texture_half_float'),  
+    textureHalfFloatRenderable: !!gl.getExtension('EXT_color_buffer_half_float'),
     textureHalfFloatLinear: !!gl.getExtension('OES_texture_half_float_linear'),
     textureFilterAnisotropic: !!gl.getExtension(
       'EXT_texture_filter_anisotropic'
